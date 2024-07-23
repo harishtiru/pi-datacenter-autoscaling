@@ -1,0 +1,21 @@
+[workernodes]
+
+kubehost131 ansible_host=172.28.8.131
+
+kubehost132 ansible_host=172.28.8.132
+
+kubehost133 ansible_host=172.28.8.133
+
+kubehost134 ansible_host=172.28.8.134
+
+
+[vmnames]
+
+worker1_name=Kubernetes131
+
+worker2_name=Kubernetes132
+
+worker3_name=Kubernetes133
+
+worker4_name=Kubernetes134
+

@@ -1,0 +1,11 @@
+[workernodes]
+kubehost126 ansible_host=172.28.8.126
+kubehost127 ansible_host=172.28.9.127
+kubehost128 ansible_host=172.28.9.128
+kubehost129 ansible_host=172.28.9.129
+
+[hostnames]
+worker1_name=Kubernetes126
+worker2_name=Kubernetes127
+worker3_name=Kubernetes128
+worker4_name=Kubernetes129

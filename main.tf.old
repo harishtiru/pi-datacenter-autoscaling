@@ -1,0 +1,188 @@
+terraform {
+  required_providers {
+    vsphere = {
+      source  = "hashicorp/vsphere"
+      version = ">= 2.0.0"
+    }
+  }
+}
+
+provider "vsphere" {
+  user                  = var.vm_username
+  password              = var.vm_password
+  vsphere_server        = var.vsphere_server
+  allow_unverified_ssl  = true
+}
+
+data "vsphere_datacenter" "dc" {
+  name = var.vsphere_datacenter
+}
+
+data "vsphere_compute_cluster" "compute_cluster" {
+  name          = var.vsphere_compute_cluster
+  datacenter_id = data.vsphere_datacenter.dc.id
+}
+
+data "vsphere_network" "network" {
+  name          = var.network
+  datacenter_id = data.vsphere_datacenter.dc.id
+}
+
+data "vsphere_virtual_machine" "template" {
+  name          = var.template
+  datacenter_id = data.vsphere_datacenter.dc.id
+}
+
+data "vsphere_host" "selected_host" {
+  name          = var.selected_host
+  datacenter_id = data.vsphere_datacenter.dc.id
+}
+
+data "local_file" "highest_ip_suffix" {
+  filename = "ansible/inventory.ini"
+  depends_on = [
+    local_file.inventory
+  ]
+  content = <<-EOF
+    awk 'NF==2{print $2}' ansible/inventory.ini | cut -f 2 -d= | awk -F'.' '{print $4}' | sort -n | tail -1
+  EOF
+}
+
+data "local_file" "highest_vm_name_prefix" {
+  filename = "ansible/inventory.ini"
+  depends_on = [
+    local_file.inventory
+  ]
+  content = <<-EOF
+    awk -F'=' '/worker[0-9]+_name=/ {gsub("[^[:alpha:]]", "", $2); print $2}' ansible/inventory.ini | sort -n | tail
+  EOF
+}
+
+data "local_file" "highest_hostname_prefix" {
+  filename = "ansible/inventory.ini"
+  depends_on = [
+    local_file.inventory
+  ]
+  content = <<-EOF
+    awk 'NF==2{print $1}' ansible/inventory.ini | grep -o '[a-zA-Z]*' | tail -1
+  EOF
+}
+
+locals {
+  base_ip_suffix = can(tonumber(data.local_file.highest_ip_suffix.content)) ? tonumber(data.local_file.highest_ip_suffix.content) : 135
+  vm_name_prefix = can(data.local_file.highest_vm_name_prefix.content) ? trim(data.local_file.highest_vm_name_prefix.content) : "kubernetes"
+  hostname_prefix = can(data.local_file.highest_hostname_prefix.content) ? trim(data.local_file.highest_hostname_prefix.content) : "kubehost"
+
+  workernodes = [
+    for idx, entry in var.workernode_inventory : {
+      hostname   = "${local.hostname_prefix}${local.base_ip_suffix + idx + 1}",
+      ip_address = "172.28.8.${local.base_ip_suffix + idx + 1}"
+    }
+  ]
+
+  vmnames = [
+    for idx, entry in var.workernode_inventory : {
+      name  = "worker${idx + 1}_name",
+      value = "${local.vm_name_prefix}${local.base_ip_suffix + idx + 1}"
+    }
+  ]
+}
+
+resource "local_file" "inventory" {
+  content = templatefile("${path.module}/inventory.tpl", {
+    workernodes = local.workernodes,
+    vmnames     = local.vmnames,
+  })
+
+  filename = "${path.module}/ansible/inventory.ini"
+}
+
+resource "local_file" "additional_inventory" {
+  content = templatefile("${path.module}/additional_inventory.tpl", {
+    idrsa = var.idrsa_pub
+  })
+
+  filename = "${path.module}/ansible/additional_inventory.ini"
+}
+
+resource "vsphere_virtual_machine" "vms" {
+  count = var.vm_count
+
+  name             = "${var.workernode_inventory[count.index % length(var.workernode_inventory)].vm_name_prefix}${count.index + 1}"
+  resource_pool_id = data.vsphere_compute_cluster.compute_cluster.resource_pool_id
+  datastore_id     = data.vsphere_datastore.selected_datastore[0].id
+  folder           = "Kubernetes"
+
+  num_cpus = 2
+  memory   = 4096
+  guest_id = "ubuntu64Guest"
+
+  disk {
+    label            = "disk0"
+    size             = "100"
+    thin_provisioned = true
+  }
+
+  connection {
+    type     = "ssh"
+    user     = "satyajit"
+    password = "Welcome@123"
+    host     = self.default_ip_address
+  }
+
+  provisioner "file" {
+    source      = var.idrsa_pub
+    destination = "/tmp/authorized_keys"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "mkdir -p ~/.ssh",
+      "cat /tmp/authorized_keys >> ~/.ssh/authorized_keys",
+      "chmod 600 ~/.ssh/authorized_keys",
+      "chmod 700 ~/.ssh",
+    ]
+  }
+
+  network_interface {
+    network_id = data.vsphere_network.network.id
+  }
+
+  clone {
+    template_uuid = data.vsphere_virtual_machine.template.id
+    customize {
+      linux_options {
+        host_name = "${local.hostname_prefix}${local.base_ip_suffix + count.index + 1}"
+        domain    = ""
+      }
+
+      network_interface {
+        ipv4_address = cidrhost("${var.workernode_inventory[count.index % length(var.workernode_inventory)].ip_base}/24", count.index + 1)
+        ipv4_netmask = 24
+      }
+
+      ipv4_gateway    = var.vm_ipv4_gateway
+      dns_server_list = ["8.8.8.8", "8.8.4.4"]
+    }
+  }
+
+  host_system_id = data.vsphere_host.selected_host.id
+}
+
+resource "vsphere_tag_category" "category" {
+  name             = "Kubernetes"
+  description      = "Category for Kubernetes VMs"
+  cardinality      = "MULTIPLE"
+  associable_types = ["VirtualMachine"]
+}
+
+resource "vsphere_tag" "worker" {
+  name        = "worker"
+  description = "Tag for worker VMs"
+  category_id = vsphere_tag_category.category.id
+}
+
+output "datastore_id" {
+  value = length(data.vsphere_datastore.selected_datastore) > 0 ? data.vsphere_datastore.selected_datastore[0].id : null
+}
+

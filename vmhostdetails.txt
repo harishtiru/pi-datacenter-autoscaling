@@ -1,0 +1,8 @@
+hostname=kubehost126, ipaddress=172.28.8.126, vmname=Kubernetes126
+hostname=kubehost127, ipaddress=172.28.9.127, vmname=Kubernetes127
+hostname=kubehost128, ipaddress=172.28.9.128, vmname=Kubernetes128
+hostname=kubehost129, ipaddress=172.28.9.129, vmname=Kubernetes129
+hostname=kubehost131, ipaddress=172.28.8.131, vmname=Kubernetes131
+hostname=kubehost132, ipaddress=172.28.8.132, vmname=Kubernetes132
+hostname=kubehost133, ipaddress=172.28.8.133, vmname=Kubernetes133
+hostname=kubehost134, ipaddress=172.28.8.134, vmname=Kubernetes134
