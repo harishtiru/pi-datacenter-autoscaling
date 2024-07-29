@@ -1,0 +1,147 @@
+---
+- name: Configure Kubernetes APT repository and install Kubernetes
+  hosts: all
+  become: yes
+  tasks:
+    - name: Update apt package cache
+      become: yes
+      apt:
+        update_cache: yes
+      register: update_result
+      until: update_result is succeeded
+    - name: Install required packages
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - docker.io
+        - apt-transport-https
+        - curl
+        - gnupg-agent
+      register: install_result
+      until: install_result is succeeded
+    - name: Ensure /etc/apt/keyrings directory exists
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Download Kubernetes GPG key
+      get_url:
+        url: https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key
+        dest: /tmp/kubernetes-release.key
+        mode: '0644'
+
+    - name: Import Kubernetes GPG key
+      command: gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg /tmp/kubernetes-release.key
+      args:
+        creates: /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+    - name: Clean up temporary key file
+      file:
+        path: /tmp/kubernetes-release.key
+        state: absent
+
+    - name: Ensure /etc/apt/sources.list.d directory exists
+      file:
+        path: /etc/apt/sources.list.d
+        state: directory
+        mode: '0755'
+
+    - name: Add Kubernetes APT repository to sources list
+      lineinfile:
+        path: /etc/apt/sources.list.d/kubernetes.list
+        line: 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /'
+        create: yes
+        state: present
+        mode: '0644'
+
+    - name: Update APT package index
+      become: yes
+      apt:
+        update_cache: yes
+      register: update_result
+      until: update_result is succeeded
+      - name: Download Docker Compose
+      get_url:
+        url: "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-{{ ansible_system | lower }}-{{ ansible_architecture }}"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+
+    - name: Create /telegraf directory if it does not exist
+      file:
+        path: /telegraf
+        state: directory
+        mode: '0755'
+
+    - name: Copy docker-compose.yaml to /telegraf
+      copy:
+        src: ./docker-compose.yaml
+        dest: /telegraf/docker-compose.yaml
+        mode: '0644'
+
+    - name: Copy telegraf.conf to /telegraf
+      copy:
+        src: ./telegraf.conf
+        dest: /telegraf/telegraf.conf
+        mode: '0644'
+
+    - name: Replace hostname in telegraf.conf with actual system hostname
+      lineinfile:
+        path: /telegraf/telegraf.conf
+        regexp: '^(hostname\s*=\s*).*'
+        line: '\1"{{ ansible_hostname }}"'
+        backrefs: yes
+
+    - name: Install Kubernetes packages
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+          - python3-jmespath
+        state: present
+        update_cache: yes
+      register: update_result
+      until: update_result is succeeded
+    - name: Hold Kubernetes packages
+      command: sudo apt-mark hold kubelet kubeadm kubectl
+
+    - name: Disable swap
+      command: swapoff -a
+      become: yes
+    - name: Ensure swap is commented out in /etc/fstab
+      replace:
+        path: /etc/fstab
+        regexp: '^([^#].*swap.*)$'
+        replace: '# \1'
+- name: Join Worker Nodes to the Kubernetes Cluster
+  hosts: workers
+  become: yes
+  tags:
+    - join_worker_nodes
+  tasks:
+    - name: Create .kube directory
+      file:
+        path: /root/.kube
+        state: directory
+        mode: '0755'
+    - name: Copy admin.conf from control node to worker node
+      copy:
+        src: /tmp/admin.conf
+        dest: /root/.kube/config
+        mode: '0644'
+    - name: Set KUBECONFIG environment variable for test user
+      become_user: test
+      lineinfile:
+        path: "/home/test/.bashrc"
+        line: 'export KUBECONFIG=/home/test/.kube/config'
+        create: yes
+    - name: Retrieve join command
+      shell: kubeadm token create --print-join-command
+        #delegate_to: master
+      register: join_command
+      run_once: true
+
+    - name: Join the node to the cluster
+      command: "{{ join_command.stdout }}"

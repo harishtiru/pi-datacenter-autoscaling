@@ -151,10 +151,15 @@ resource "vsphere_virtual_machine" "vms" {
 }
 
 resource "local_file" "inventory" {
-  content = templatefile("inventory.tpl", {
-    worker_nodes = local.workernodes,
-    vmnames      = local.vmnames,
-  })
+  content = join("\n\n", [
+    templatefile("inventory.tpl", {
+      worker_nodes = local.workernodes,
+      vmnames      = local.vmnames,
+  }),
+    templatefile("additional_inventory.tpl", {
+      idrsa = var.idrsa
+    })
+  ])
 
   filename = "ansible/inventory.ini"
 }
