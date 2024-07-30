@@ -1,7 +1,15 @@
 [workernodes]
 kubehost126 ansible_host=172.28.8.126
-kubehost127 ansible_host=172.28.9.127
+kubehost127 ansible_host=172.28.8.127
 
 [hostnames]
 worker1_name=Kubernetes126
 worker2_name=Kubernetes127
+
+[master]
+kubehost125 ansible_host=172.28.8.125
+
+[all:vars]
+ansible_ssh_private_key_file=id_rsa
+ansible_user=test
+ansible_ssh_common_args='-o StrictHostKeyChecking=no'

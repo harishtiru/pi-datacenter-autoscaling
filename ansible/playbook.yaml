@@ -1,6 +1,21 @@
 ---
+- name: Prepare Control Node
+  hosts: master
+  become: yes
+  tasks:
+    - name: Fetch admin.conf from control node
+      fetch:
+        src: /tmp/admin.conf
+        dest: /tmp/admin.conf
+        flat: yes
+
+    - name: Copy admin.conf to a location accessible to worker nodes
+      copy:
+        src: /tmp/admin.conf
+        dest: /tmp/admin.conf
+        mode: '0644'
 - name: Configure Kubernetes APT repository and install Kubernetes
-  hosts: all
+  hosts: workernodes
   become: yes
   tasks:
     - name: Update apt package cache
@@ -62,7 +77,7 @@
         update_cache: yes
       register: update_result
       until: update_result is succeeded
-      - name: Download Docker Compose
+    - name: Download Docker Compose
       get_url:
         url: "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-{{ ansible_system | lower }}-{{ ansible_architecture }}"
         dest: /usr/local/bin/docker-compose
@@ -76,13 +91,13 @@
 
     - name: Copy docker-compose.yaml to /telegraf
       copy:
-        src: ./docker-compose.yaml
+        src: docker-compose.yaml
         dest: /telegraf/docker-compose.yaml
         mode: '0644'
 
     - name: Copy telegraf.conf to /telegraf
-      copy:
-        src: ./telegraf.conf
+      template:
+        src: telegraf.conf.j2
         dest: /telegraf/telegraf.conf
         mode: '0644'
 
@@ -92,6 +107,15 @@
         regexp: '^(hostname\s*=\s*).*'
         line: '\1"{{ ansible_hostname }}"'
         backrefs: yes
+    - name: Set docker sock file ownership
+      file:
+        path: /var/run/docker.sock
+        mode: '0666'
+
+    - name: Run docker-compose up -d
+      command: docker-compose up -d
+      args:
+        chdir: /telegraf
 
     - name: Install Kubernetes packages
       apt:
@@ -116,7 +140,7 @@
         regexp: '^([^#].*swap.*)$'
         replace: '# \1'
 - name: Join Worker Nodes to the Kubernetes Cluster
-  hosts: workers
+  hosts: workernodes
   become: yes
   tags:
     - join_worker_nodes
