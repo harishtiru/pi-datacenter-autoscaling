@@ -8,7 +8,7 @@ else
 fi
 
 # Process the chosen file
-awk '
+highest_prefix=$(awk '
 /^\[vmnames\]/ {
   # Print lines under [workernodes] and [vmnames] sections
   if (/^\[vmnames\]/) {
@@ -19,4 +19,6 @@ awk '
     }
   }
 }
-' "$FILE" | cut -f 2 -d= | grep -v "vmnames" | tail -1 | grep -o '[a-zA-Z]*'
+' "$FILE" | cut -f 2 -d= | grep -v "vmnames" | tail -1 | grep -o '[a-zA-Z]*')
+# Output the result in JSON format
+echo "{ \"output\": \"$highest_prefix\" }"
