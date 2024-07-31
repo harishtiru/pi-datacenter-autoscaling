@@ -2,7 +2,7 @@
 kubehost126 ansible_host=172.28.8.126
 kubehost127 ansible_host=172.28.8.127
 
-[hostnames]
+[vmnames]
 worker1_name=Kubernetes126
 worker2_name=Kubernetes127
 
