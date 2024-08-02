@@ -70,6 +70,17 @@ variable "host_datastore_map" {
     "172.28.8.4" = ["Local-4.0"]
   }
 }
+variable "current_vm_count" {
+  description = "The current number of VMs in the cluster"
+  type        = number
+  default     = 0
+}
+
+variable "increment" {
+  description = "The number of VMs to add"
+  type        = number
+  default     = 2
+}
 
 variable "workernode_inventory" {
   type = list(object({
