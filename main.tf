@@ -69,14 +69,14 @@ locals {
   highest_vm_name_prefix  = trimspace(data.external.highest_vm_name_prefix.result["output"])
 
   workernodes = [
-    for idx in range(0, var.vm_count) : {
+    for idx in range(0, local.target_vm_count) : {
       hostname   = "${local.highest_hostname_prefix}${local.highest_ip_suffix + idx}",
       ip_address = "172.28.8.${local.highest_ip_suffix + idx}"
     }
   ]
 
   vmnames = [
-    for idx in range(0, var.vm_count) : {
+    for idx in range(0, local.target_vm_count) : {
       name  = "worker${idx + 1}_name",
       value = "${local.highest_vm_name_prefix}${local.highest_ip_suffix + idx}"
     }
