@@ -1,8 +1,3 @@
-variable "vm_count" {
-  description = "Number of VM instances to create"
-  type        = number
-}
-
 variable "vm_username" {
   description = "Username for vSphere provider"
   type        = string
