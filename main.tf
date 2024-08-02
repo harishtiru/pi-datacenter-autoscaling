@@ -63,6 +63,7 @@ data "vsphere_tag_category" "existing_category" {
 }
 
 locals {
+  target_vm_count = var.current_vm_count + var.increment
   highest_ip_suffix       = tonumber(trimspace(data.external.highest_ip_suffix.result["output"])) + 1
   highest_hostname_prefix = trimspace(data.external.highest_hostname_prefix.result["output"])
   highest_vm_name_prefix  = trimspace(data.external.highest_vm_name_prefix.result["output"])
@@ -87,7 +88,8 @@ locals {
 }
 
 resource "vsphere_virtual_machine" "vms" {
-  count = var.vm_count
+  #count = var.vm_count
+  count = local.target_vm_count
 
   name             = "${local.highest_vm_name_prefix}${local.highest_ip_suffix + count.index}"
   resource_pool_id = data.vsphere_compute_cluster.compute_cluster.resource_pool_id
