@@ -1,7 +1,6 @@
 variable "vm_count" {
   description = "Number of VM instances to create"
   type        = number
-  default     = 4
 }
 
 variable "vm_username" {
