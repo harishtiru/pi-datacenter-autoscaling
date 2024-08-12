@@ -5,7 +5,7 @@
   tasks:
     - name: Fetch admin.conf from control node
       fetch:
-        src: /tmp/admin.conf
+        src: /etc/kubernetes/admin.conf
         dest: /tmp/admin.conf
         flat: yes
 
